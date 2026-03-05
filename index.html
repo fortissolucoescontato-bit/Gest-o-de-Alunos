@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema Financeiro Escolar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <img src="/assets/logo.png" alt="Terceirão 2026"
+          style="width: 100%; border-radius: 12px; margin-bottom: 0.5rem;">
+      </div>
+      <nav>
+        <ul class="nav-links">
+          <li class="nav-item active" data-view="dashboard">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+          </li>
+          <li class="nav-item" data-view="students">
+            <i data-lucide="users"></i> Alunos
+          </li>
+          <li class="nav-item" data-view="expenses">
+            <i data-lucide="receipt"></i> Despesas
+          </li>
+          <li class="nav-item" data-view="calendar">
+            <i data-lucide="calendar"></i> Calendário
+          </li>
+          <li class="nav-item" data-view="reports">
+            <i data-lucide="file-bar-chart"></i> Relatórios
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header>
+        <div class="page-title">
+          <h1 id="view-title">Dashboard Financeiro</h1>
+          <p id="view-subtitle">Visão geral da formatura 2026</p>
+        </div>
+        <div class="user-profile">
+          <!-- Profile placeholder -->
+        </div>
+      </header>
+
+      <section class="ai-bar-container fade-in">
+        <input type="text" class="ai-input" id="ai-command-bar"
+          placeholder="Ex: 'João Silva pagou 250 via Pix' ou 'Adicionar despesa buffet 5000'...">
+      </section>
+
+      <div id="view-container" class="fade-in">
+        <div style="text-align: center; padding: 4rem;">
+          <h3>Carregando dados...</h3>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
