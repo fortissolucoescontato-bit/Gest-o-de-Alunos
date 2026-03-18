@@ -72,23 +72,18 @@ export const actions = {
   addPayment: async (studentName, amount) => {
     const student = state.students.find(s => s.name.toLowerCase().includes(studentName.toLowerCase()));
     if (student) {
-      const newPaid = (student.paid || 0) + amount;
-      const newStatus = newPaid >= (student.total || 2000) ? 'paid' : 'pending';
-
-      const { error: sError } = await supabase
-        .from('students')
-        .update({ paid: newPaid, status: newStatus })
-        .eq('id', student.id);
-
-      if (sError) return { success: false, message: 'Erro ao atualizar aluno' };
-
+      // O cálculo de 'paid' e 'status' agora é feito automaticamente via TRIGGER no Supabase.
+      // Basta inserir a parcela para que o banco de dados recalcule o total de forma segura.
       const { error: iError } = await supabase
         .from('installments')
         .insert({ student_id: student.id, amount: amount });
 
-      if (iError) return { success: false, message: 'Erro ao registrar pagamento' };
+      if (iError) {
+        console.error('Add Payment Error:', iError);
+        return { success: false, message: 'Erro ao registrar pagamento' };
+      }
 
-      await loadInitialData(); // Refresh state
+      await loadInitialData(); // Refresh state com dados recalculados pelo banco
       return { success: true, message: `Lançado R$ ${amount} para ${student.name}` };
     }
     return { success: false, message: `Aluno "${studentName}" não encontrado` };
@@ -123,7 +118,9 @@ export const actions = {
   },
 
   addStudentReceipt: async (studentId, file) => {
-    const filename = `${Date.now()}_${file.name}`;
+    // Sanitize filename: remove spaces, use timestamp for uniqueness
+    const cleanFileName = file.name.replace(/\s+/g, '_');
+    const filename = `${Date.now()}_${cleanFileName}`;
 
     // Upload actual file to Supabase Storage
     const { error: uploadError } = await supabase.storage
@@ -132,7 +129,7 @@ export const actions = {
 
     if (uploadError) {
       console.error('Storage Upload Error:', uploadError);
-      return { success: false, message: 'Erro ao fazer upload do arquivo' };
+      return { success: false, message: `Erro no Supabase Storage: ${uploadError.message || 'Bucket não encontrado ou não público'}` };
     }
 
     const { error } = await supabase

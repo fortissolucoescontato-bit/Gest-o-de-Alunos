@@ -285,7 +285,7 @@ const renderStudentDetails = (id) => {
                      <div style="font-size: 0.75rem; color: var(--text-secondary)">${r.date}</div>
                    </div>
                    <div style="display: flex; gap: 0.5rem;">
-                     <a href="${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/comprovantes/${r.filename}" target="_blank" class="btn-icon">
+                     <a href="${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/comprovantes/${encodeURIComponent(r.filename)}" target="_blank" class="btn-icon">
                        <i data-lucide="external-link"></i> Abrir
                      </a>
                      <button class="btn-icon delete-btn" onclick="window.removeReceipt('${student.id}', '${r.id}')">
@@ -330,16 +330,21 @@ const renderStudentDetails = (id) => {
   const dropZone = document.getElementById('receipt-drop-zone');
   const fileInput = document.getElementById('receipt-input');
 
-  if (dropZone && fileInput) {
-    dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = async (e) => {
-      if (e.target.files.length > 0) {
-        const file = e.target.files[0];
-        await actions.addStudentReceipt(id, file);
-        renderStudentDetails(id);
-      }
-    };
-  }
+    if (dropZone && fileInput) {
+      dropZone.onclick = () => fileInput.click();
+      fileInput.onchange = async (e) => {
+        if (e.target.files.length > 0) {
+          const file = e.target.files[0];
+          const result = await actions.addStudentReceipt(id, file);
+          
+          if (!result.success) {
+            alert(result.message);
+          } else {
+            renderStudentDetails(id);
+          }
+        }
+      };
+    }
 };
 
 const renderExpenses = () => {
