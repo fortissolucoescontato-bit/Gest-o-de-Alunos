@@ -141,6 +141,58 @@ ON CONFLICT (username) DO NOTHING;
 ALTER TABLE internal_auth ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Internal Access Only" ON internal_auth FOR ALL USING (false);
 
+-- --- SESSIONS (NEXO-FORTIS) ---
+CREATE TABLE IF NOT EXISTS public.internal_auth_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_token TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    expires_at TIMESTAMP WITH TIME ZONE DEFAULT (now() + interval '2 hours')
+);
+
+CREATE OR REPLACE FUNCTION verify_admin_login_secure(p_username TEXT, p_password TEXT)
+RETURNS JSONB AS $$
+DECLARE
+    v_match BOOLEAN;
+    v_token TEXT;
+BEGIN
+    SELECT (password_hash = crypt(p_password, password_hash))
+    INTO v_match
+    FROM internal_auth
+    WHERE username = p_username;
+    
+    IF NOT COALESCE(v_match, false) THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Credenciais Inválidas');
+    END IF;
+
+    v_token := encode(gen_random_bytes(32), 'hex');
+    INSERT INTO internal_auth_sessions (session_token) VALUES (v_token);
+
+    RETURN jsonb_build_object('success', true, 'session_token', v_token, 'message', 'Acesso Autorizado');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION validate_session(p_token TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+    DELETE FROM internal_auth_sessions WHERE expires_at < now(); 
+    RETURN EXISTS (SELECT 1 FROM internal_auth_sessions WHERE session_token = p_token AND expires_at > now());
+END;
+$$ LANGUAGE plpgsql;
+
+-- --- SECURE RPCS (TUNNELS) ---
+-- Todas as inserções/alterações do FRONT passam por estas funções validadoras.
+
+CREATE OR REPLACE FUNCTION rpc_add_student(p_token TEXT, p_name TEXT, p_total NUMERIC)
+RETURNS UUID AS $$
+DECLARE v_id UUID;
+BEGIN
+    IF NOT validate_session(p_token) THEN RAISE EXCEPTION 'Sessão Inválida'; END IF;
+    INSERT INTO public.students (name, total, paid, status) VALUES (p_name, p_total, 0, 'pending') RETURNING id INTO v_id;
+    RETURN v_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE POLICY "Internal Access Only" ON internal_auth FOR ALL USING (false);
+
 -- RPC for secure login verification
 CREATE OR REPLACE FUNCTION verify_admin_login(p_username TEXT, p_password TEXT)
 RETURNS BOOLEAN AS $$
