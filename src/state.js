@@ -17,38 +17,65 @@ export const state = {
 export const loadInitialData = async () => {
   state.loading = true;
 
-  const [
-    { data: students, error: sError },
-    { data: expenses, error: exError },
-    { data: events, error: evError },
-    { data: config, error: cError }
-  ] = await Promise.all([
-    supabase.from('students').select('*, installments(*), receipts(*)'),
-    supabase.from('expenses').select('*'),
-    supabase.from('events').select('*'),
-    supabase.from('config').select('*')
-  ]);
+  try {
+    const [
+      { data: students, error: sError },
+      { data: expenses, error: exError },
+      { data: events, error: evError },
+      { data: config, error: cError }
+    ] = await Promise.all([
+      supabase.from('students').select('*, installments(*), receipts(*)'),
+      supabase.from('expenses').select('*'),
+      supabase.from('events').select('*'),
+      supabase.from('config').select('*')
+    ]);
 
-  if (sError) console.error('Error loading students:', sError);
-  if (exError) console.error('Error loading expenses:', exError);
-  if (evError) console.error('Error loading events:', evError);
-  if (cError) console.error('Error loading config:', cError);
+    if (sError) throw sError;
+    if (exError) throw exError;
+    if (evError) throw evError;
+    if (cError) throw cError;
 
-  if (students) state.students = students;
-  if (expenses) state.expenses = expenses;
-  if (events) state.events = events;
-  if (config) {
-    const general = config.find(c => c.key === 'general');
-    if (general) state.config = general.value;
+    if (students) state.students = students;
+    if (expenses) state.expenses = expenses;
+    if (events) state.events = events;
+    if (config) {
+      const general = config.find(c => c.key === 'general');
+      if (general) state.config = general.value;
+    }
+  } catch (err) {
+    console.error('Fatal data load error:', err);
+  } finally {
+    state.loading = false;
   }
-
-  state.loading = false;
   return state;
 };
 
+// --- Helper for Partial Updates ---
+const refreshStudent = async (studentId) => {
+  const { data, error } = await supabase
+    .from('students')
+    .select('*, installments(*), receipts(*)')
+    .eq('id', studentId)
+    .single();
+
+  if (data && !error) {
+    const index = state.students.findIndex(s => s.id === studentId);
+    if (index !== -1) {
+      state.students[index] = data;
+    } else {
+      state.students.push(data);
+    }
+    return true;
+  }
+  return false;
+};
+
+// HELPER: Obter Token de Sessão
+const getSessionToken = () => localStorage.getItem('sessionToken');
+
 export const getters = {
-  getTotalArrecadado: () => state.students.reduce((acc, s) => acc + (s.paid || 0), 0),
-  getTotalGasto: () => state.expenses.reduce((acc, e) => acc + (e.paid || 0), 0),
+  getTotalArrecadado: () => state.students.reduce((acc, s) => acc + (parseFloat(s.paid) || 0), 0),
+  getTotalGasto: () => state.expenses.reduce((acc, e) => acc + (parseFloat(e.paid) || 0), 0),
   getSaldo: () => getters.getTotalArrecadado() - getters.getTotalGasto(),
   getPendingStudents: () => state.students.filter(s => s.status !== 'paid').length,
   getMonthlyArrecadacao: () => {
@@ -57,7 +84,7 @@ export const getters = {
       (s.installments || []).forEach(inst => {
         if (inst.date) {
           const month = new Date(inst.date).getMonth();
-          monthlyData[month] += inst.amount;
+          monthlyData[month] += (parseFloat(inst.amount) || 0);
         }
       });
     });
@@ -71,154 +98,171 @@ export const getters = {
 
 export const actions = {
   addPayment: async (studentName, amount) => {
+    const token = getSessionToken();
     const student = state.students.find(s => s.name.toLowerCase().includes(studentName.toLowerCase()));
     if (student) {
-      // O cálculo de 'paid' e 'status' agora é feito automaticamente via TRIGGER no Supabase.
-      // Basta inserir a parcela para que o banco de dados recalcule o total de forma segura.
-      const { error: iError } = await supabase
-        .from('installments')
-        .insert({ student_id: student.id, amount: amount });
+      const { error: iError } = await supabase.rpc('rpc_add_payment', {
+        p_token: token,
+        p_student_id: student.id,
+        p_amount: amount
+      });
 
       if (iError) {
         console.error('Add Payment Error:', iError);
-        return { success: false, message: 'Erro ao registrar pagamento' };
+        return { success: false, message: 'Erro na autenticação de segurança' };
       }
 
-      await loadInitialData(); // Refresh state com dados recalculados pelo banco
+      await refreshStudent(student.id);
       return { success: true, message: `Lançado R$ ${amount} para ${student.name}` };
     }
     return { success: false, message: `Aluno "${studentName}" não encontrado` };
   },
 
   addExpense: async (provider, amount) => {
-    const { error } = await supabase
-      .from('expenses')
-      .insert({
-        provider,
-        total: amount,
-        paid: amount,
-        date: new Date().toISOString().split('T')[0]
-      });
+    const token = getSessionToken();
+    const { data: id, error } = await supabase.rpc('rpc_add_expense', {
+        p_token: token,
+        p_provider: provider,
+        p_total: amount,
+        p_paid: amount,
+        p_date: new Date().toISOString().split('T')[0]
+    });
 
-    if (error) return { success: false, message: 'Erro ao lançar despesa' };
+    if (error) return { success: false, message: 'Acesso negado: Somente administradores' };
 
-    await loadInitialData();
+    const { data: newExpense } = await supabase.from('expenses').select('*').eq('id', id).single();
+    if (newExpense) state.expenses.unshift(newExpense);
+    
     return { success: true, message: `Despesa de R$ ${amount} lançada para ${provider}` };
   },
 
   updateStudent: async (id, data) => {
-    const { error } = await supabase
-      .from('students')
-      .update(data)
-      .eq('id', id);
+    const token = getSessionToken();
+    const { error } = await supabase.rpc('rpc_update_student', {
+        p_token: token,
+        p_id: id,
+        p_name: data.name,
+        p_total: data.total
+    });
 
-    if (error) return { success: false, message: 'Erro ao atualizar aluno' };
+    if (error) return { success: false, message: 'Erro na autenticação de segurança' };
 
-    await loadInitialData();
+    await refreshStudent(id);
     return { success: true, message: `Dados atualizados` };
   },
 
   addStudentReceipt: async (studentId, file) => {
-    // Sanitize filename: remove spaces, use timestamp for uniqueness
+    const token = getSessionToken();
     const cleanFileName = file.name.replace(/\s+/g, '_');
     const filename = `${Date.now()}_${cleanFileName}`;
 
-    // Upload actual file to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('comprovantes')
       .upload(filename, file);
 
     if (uploadError) {
       console.error('Storage Upload Error:', uploadError);
-      return { success: false, message: `Erro no Supabase Storage: ${uploadError.message || 'Bucket não encontrado ou não público'}` };
+      return { success: false, message: `Erro no Supabase Storage: ${uploadError.message}` };
     }
 
-    const { error } = await supabase
-      .from('receipts')
-      .insert({
-        student_id: studentId,
-        filename,
-        date: new Date().toISOString()
-      });
+    const { error } = await supabase.rpc('rpc_add_receipt', {
+        p_token: token,
+        p_student_id: studentId,
+        p_filename: filename
+    });
 
-    if (error) return { success: false, message: 'Erro ao registrar comprovante no banco' };
+    if (error) return { success: false, message: 'Erro ao registrar comprovante' };
 
-    await loadInitialData();
+    await refreshStudent(studentId);
     return { success: true, message: `Comprovante enviado com sucesso` };
   },
 
   deleteStudentReceipt: async (receiptId) => {
-    const { error } = await supabase
-      .from('receipts')
-      .delete()
-      .eq('id', receiptId);
+    const token = getSessionToken();
+    const receipt = state.students.flatMap(s => s.receipts).find(r => r.id === receiptId);
+    const studentId = receipt?.student_id;
 
-    if (error) return { success: false, message: 'Erro ao remover comprovante' };
+    const { error } = await supabase.rpc('rpc_delete_receipt', {
+        p_token: token,
+        p_receipt_id: receiptId
+    });
 
-    await loadInitialData();
+    if (error) return { success: false, message: 'Erro na auditoria de segurança' };
+
+    if (studentId) await refreshStudent(studentId);
     return { success: true, message: 'Comprovante removido' };
   },
 
   addStudent: async (name, total) => {
-    const { error } = await supabase
-      .from('students')
-      .insert({ name, total, paid: 0, status: 'pending' });
+    const token = getSessionToken();
+    const { data: id, error } = await supabase.rpc('rpc_add_student', {
+        p_token: token,
+        p_name: name,
+        p_total: total
+    });
 
-    if (error) return { success: false, message: 'Erro ao cadastrar aluno' };
+    if (error) return { success: false, message: 'Acesso Negado: Token Inválido' };
 
-    await loadInitialData();
+    await refreshStudent(id);
     return { success: true, message: `Aluno ${name} cadastrado` };
   },
 
   deleteStudent: async (id) => {
-    const { error } = await supabase
-      .from('students')
-      .delete()
-      .eq('id', id);
+    const token = getSessionToken();
+    const { error } = await supabase.rpc('rpc_delete_student', {
+        p_token: token,
+        p_id: id
+    });
 
-    if (error) return { success: false, message: 'Erro ao remover aluno' };
+    if (error) return { success: false, message: 'Erro ao remover: Segurança Ativa' };
 
-    await loadInitialData();
+    state.students = state.students.filter(s => s.id !== id);
     return { success: true, message: 'Aluno removido com sucesso' };
   },
 
   deleteExpense: async (id) => {
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', id);
+    const token = getSessionToken();
+    const { error } = await supabase.rpc('rpc_delete_expense', {
+        p_token: token,
+        p_id: id
+    });
 
-    if (error) return { success: false, message: 'Erro ao remover despesa' };
+    if (error) return { success: false, message: 'Acesso negado para deleção' };
 
-    await loadInitialData();
+    state.expenses = state.expenses.filter(e => e.id !== id);
     return { success: true, message: 'Despesa removida' };
   },
 
-  updateExpense: async (id, data) => {
-    const { error } = await supabase
-      .from('expenses')
-      .update(data)
-      .eq('id', id);
-
-    if (error) return { success: false, message: 'Erro ao atualizar despesa' };
-
-    await loadInitialData();
-    return { success: true, message: 'Despesa atualizada' };
-  },
-
   addEvent: async (title, date, description = '') => {
-    const { error } = await supabase
-      .from('events')
-      .insert({ title, date, description });
+    const token = getSessionToken();
+    const { error } = await supabase.rpc('rpc_add_event', {
+        p_token: token,
+        p_title: title,
+        p_date: date,
+        p_desc: description
+    });
 
-    if (error) return { success: false, message: 'Erro ao adicionar evento' };
+    if (error) return { success: false, message: 'Erro de autorização' };
 
     await loadInitialData();
     return { success: true, message: 'Evento adicionado' };
   },
 
+  deleteEvent: async (id) => {
+    const token = getSessionToken();
+    const { error } = await supabase.rpc('rpc_delete_event', {
+        p_token: token,
+        p_id: id
+    });
+
+    if (error) return { success: false, message: 'Erro ao remover evento' };
+
+    await loadInitialData();
+    return { success: true, message: 'Evento removido' };
+  },
+
   loginAdmin: async (username, password) => {
-    const { data, error } = await supabase.rpc('verify_admin_login', {
+    const { data, error } = await supabase.rpc('verify_admin_login_secure', {
       p_username: username,
       p_password: password
     });
@@ -228,11 +272,12 @@ export const actions = {
       return { success: false, message: 'Falha na conexão com servidor auth.' };
     }
 
-    if (data === true) {
+    if (data && data.success === true) {
       state.isAdmin = true;
       localStorage.setItem('isAdmin', 'true');
+      localStorage.setItem('sessionToken', data.session_token);
       localStorage.setItem('adminEmail', username);
-      return { success: true, message: 'Bem vindo, Administrador!' };
+      return { success: true, message: 'Bem vindo! (Sessão Blindada Iniciada)' };
     }
 
     return { success: false, message: 'Usuário ou senha incorretos.' };
@@ -241,31 +286,8 @@ export const actions = {
   logoutAdmin: () => {
     state.isAdmin = false;
     localStorage.removeItem('isAdmin');
+    localStorage.removeItem('sessionToken');
     localStorage.removeItem('adminEmail');
     location.reload();
-  },
-
-  changeAdminPassword: async (currentPassword, newPassword) => {
-    const email = localStorage.getItem('adminEmail') || 'admin@terceirao2026.com';
-    const { data, error } = await supabase.rpc('update_admin_password', {
-      p_username: email,
-      p_current_password: currentPassword,
-      p_new_password: newPassword
-    });
-
-    if (error) return { success: false, message: 'Erro na conexão com o servidor.' };
-    return data; // { success: true/false, message: '...' }
-  },
-
-  deleteEvent: async (id) => {
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .eq('id', id);
-
-    if (error) return { success: false, message: 'Erro ao remover evento' };
-
-    await loadInitialData();
-    return { success: true, message: 'Evento removido' };
   }
 };
