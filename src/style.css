@@ -209,6 +209,7 @@ header {
   border-radius: 24px;
   padding: 2rem;
   transition: var(--transition);
+  max-width: 100%;
 }
 
 .glass-card:hover {
@@ -217,10 +218,12 @@ header {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.5rem;
   margin-bottom: 3rem;
+  width: 100%;
 }
+
 
 .stat-card {
   padding: 1.75rem;
@@ -478,6 +481,42 @@ form .ai-input {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* =========================================
+   💻 RESPONSIVIDADE (NOTEBOOKS)
+   ========================================= */
+@media (max-width: 1440px) {
+  .main-content {
+    padding: 2rem;
+  }
+}
+
+@media (max-width: 1280px) {
+  .sidebar {
+    width: 240px;
+    padding: 2rem 1rem;
+  }
+
+  .main-content {
+    padding: 1.5rem;
+  }
+
+  .page-title h1 {
+    font-size: 1.85rem;
+  }
+
+  .stat-card {
+    padding: 1.25rem;
+  }
+
+  .stat-card .value {
+    font-size: 1.85rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 colunas no notebook pequeno para ficar bonito em vez de espremido */
+  }
 }
 
 /* =========================================
