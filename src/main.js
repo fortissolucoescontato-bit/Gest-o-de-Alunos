@@ -231,6 +231,7 @@ const renderStudents = () => {
       return false;
     });
   };
+  }
 };
 
 window.removeStudent = (id) => {
@@ -437,6 +438,7 @@ const renderExpenses = () => {
       return false;
     });
   };
+  }
 };
 
 window.viewExpense = (id) => {
@@ -607,6 +609,7 @@ const renderCalendar = (selectedMonth = new Date().getMonth()) => {
       return false;
     });
   };
+  }
 };
 
 window.switchMonth = (index) => renderCalendar(index);
