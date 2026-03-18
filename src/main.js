@@ -208,7 +208,9 @@ const renderStudents = () => {
   `;
   initIcons();
 
-  document.getElementById('add-student-btn').onclick = () => {
+  const addStudentBtn = document.getElementById('add-student-btn');
+  if (addStudentBtn) {
+    addStudentBtn.onclick = () => {
     showModal('Adicionar Novo Aluno', `
       <div class="form-group">
         <label>Nome Completo do Aluno</label>
@@ -319,6 +321,11 @@ const renderStudentDetails = (id) => {
   // Handle Edit Submit
   const form = document.getElementById('edit-student-form');
   if (form) {
+    if (!state.isAdmin) {
+      form.querySelectorAll('input').forEach(i => i.disabled = true);
+      form.querySelector('button[type="submit"]').style.display = 'none';
+    }
+
     form.onsubmit = async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
@@ -407,7 +414,9 @@ const renderExpenses = () => {
   `;
   initIcons();
 
-  document.getElementById('add-expense-btn').onclick = () => {
+  const addExpenseBtn = document.getElementById('add-expense-btn');
+  if (addExpenseBtn) {
+    addExpenseBtn.onclick = () => {
     showModal('Lançar Nova Despesa', `
       <div class="form-group">
         <label>Fornecedor</label>
@@ -477,6 +486,11 @@ const renderExpenseDetails = (id) => {
 
   const form = document.getElementById('edit-expense-form');
   if (form) {
+    if (!state.isAdmin) {
+      form.querySelectorAll('input').forEach(i => i.disabled = true);
+      form.querySelector('button[type="submit"]').style.display = 'none';
+    }
+
     form.onsubmit = async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
@@ -517,9 +531,11 @@ const renderCalendar = (selectedMonth = new Date().getMonth()) => {
     <div class="glass-card fade-in">
        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
           <h3>Calendário de Eventos</h3>
-          <button class="btn-primary" id="add-calendar-event" style="display: flex; align-items: center; gap: 0.5rem;">
-            <i data-lucide="calendar" style="width: 18px;"></i> Novo Evento
-          </button>
+          ${state.isAdmin ? `
+            <button class="btn-primary" id="add-calendar-event" style="display: flex; align-items: center; gap: 0.5rem;">
+              <i data-lucide="calendar" style="width: 18px;"></i> Novo Evento
+            </button>
+          ` : ''}
        </div>
 
        <div style="display: flex; gap: 0.75rem; margin-bottom: 2.5rem; overflow-x: auto; padding-bottom: 1rem; scrollbar-width: thin; -webkit-overflow-scrolling: touch;">
@@ -549,7 +565,7 @@ const renderCalendar = (selectedMonth = new Date().getMonth()) => {
                 <div style="font-weight: 700; font-family: var(--font-display); font-size: 1.15rem; color: ${e.type === 'late' ? 'var(--error)' : 'var(--text-primary)'}">
                   ${e.value ? `R$ ${e.value.toLocaleString()}` : ''}
                 </div>
-                ${e.type === 'custom' ? `
+                ${e.type === 'custom' && state.isAdmin ? `
                   <button class="btn-icon delete-btn" onclick="window.removeEvent('${e.id}')">
                     <i data-lucide="trash-2" style="width: 16px;"></i>
                   </button>
@@ -563,7 +579,9 @@ const renderCalendar = (selectedMonth = new Date().getMonth()) => {
 
   initIcons();
 
-  document.getElementById('add-calendar-event').onclick = () => {
+  const addEventBtn = document.getElementById('add-calendar-event');
+  if (addEventBtn) {
+    addEventBtn.onclick = () => {
     showModal('Novo Evento no Calendário', `
       <div class="form-group">
         <label>Título do Evento</label>
