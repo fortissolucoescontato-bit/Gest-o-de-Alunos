@@ -3,7 +3,7 @@ import {
   createIcons, LayoutDashboard, Users, Receipt, Calendar, FileBarChart,
   Eye, Trash2, ExternalLink, Pencil, TrendingUp, TrendingDown, Wallet,
   AlertCircle, CheckCircle, Clock, Plus, Construction, ArrowLeft, UploadCloud, Save,
-  DownloadCloud, PieChart, FileText, FileSpreadsheet
+  DownloadCloud, PieChart, FileText, FileSpreadsheet, ShieldCheck, LogOut, Key
 } from 'lucide';
 import { Chart, registerables } from 'chart.js';
 import * as XLSX from 'xlsx';
@@ -20,7 +20,7 @@ const initIcons = () => {
       LayoutDashboard, Users, Receipt, Calendar, FileBarChart,
       Eye, Trash2, ExternalLink, Pencil, TrendingUp, TrendingDown,
       Wallet, AlertCircle, CheckCircle, Clock, Plus, Construction, ArrowLeft, UploadCloud, Save,
-      DownloadCloud, PieChart, FileText, FileSpreadsheet
+      DownloadCloud, PieChart, FileText, FileSpreadsheet, ShieldCheck, LogOut, Key
     }
   });
 };
@@ -157,9 +157,11 @@ const renderStudents = () => {
     <div class="glass-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h3>Lista de Alunos</h3>
-        <button class="btn-primary" id="add-student-btn" style="display: flex; align-items: center; gap: 0.5rem;">
-          <i data-lucide="plus" style="width: 18px;"></i> Adicionar Aluno
-        </button>
+        ${state.isAdmin ? `
+          <button class="btn-primary" id="add-student-btn" style="display: flex; align-items: center; gap: 0.5rem;">
+            <i data-lucide="plus" style="width: 18px;"></i> Adicionar Aluno
+          </button>
+        ` : ''}
       </div>
       <table>
         <thead>
@@ -191,9 +193,11 @@ const renderStudents = () => {
                   <button class="btn-icon" onclick="window.viewStudent('${s.id}')">
                     <i data-lucide="eye" style="width: 16px;"></i> Detalhes
                   </button>
-                  <button class="btn-icon delete-btn" onclick="window.removeStudent('${s.id}')">
-                    <i data-lucide="trash-2" style="width: 16px;"></i>
-                  </button>
+                  ${state.isAdmin ? `
+                    <button class="btn-icon delete-btn" onclick="window.removeStudent('${s.id}')">
+                      <i data-lucide="trash-2" style="width: 16px;"></i>
+                    </button>
+                  ` : ''}
                 </div>
               </td>
             </tr>
@@ -353,9 +357,11 @@ const renderExpenses = () => {
     <div class="glass-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h3>Controle de Despesas</h3>
-        <button class="btn-primary" id="add-expense-btn" style="display: flex; align-items: center; gap: 0.5rem;">
-          <i data-lucide="plus" style="width: 18px;"></i> Nova Despesa
-        </button>
+        ${state.isAdmin ? `
+          <button class="btn-primary" id="add-expense-btn" style="display: flex; align-items: center; gap: 0.5rem;">
+            <i data-lucide="plus" style="width: 18px;"></i> Nova Despesa
+          </button>
+        ` : ''}
       </div>
       <table>
         <thead>
@@ -930,10 +936,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   const aiInput = document.getElementById('ai-command-bar');
-  aiInput.addEventListener('keypress', async (e) => {
-    if (e.key === 'Enter') {
-      await processCommand(aiInput.value);
-      aiInput.value = '';
+  if (aiInput) {
+    aiInput.addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') {
+        await processCommand(aiInput.value);
+        aiInput.value = '';
+      }
+    });
+  }
+
+  // Handle Admin Login/Logout
+  const adminBtn = document.getElementById('admin-login-btn');
+  if (adminBtn) {
+    if (state.isAdmin) {
+      adminBtn.innerHTML = `<i data-lucide="log-out"></i> Sair do Painel`;
+      adminBtn.onclick = () => actions.logoutAdmin();
+    } else {
+      adminBtn.onclick = () => {
+        showModal('Acesso do Aluno Responsável', `
+          <div class="form-group">
+            <label>Usuário (E-mail)</label>
+            <input type="email" id="login-email" class="ai-input" placeholder="admin@terceirao2026.com">
+          </div>
+          <div class="form-group" style="margin-top: 1.25rem;">
+            <label>Senha</label>
+            <input type="password" id="login-password" class="ai-input" placeholder="••••••••">
+          </div>
+        `, async () => {
+          const email = document.getElementById('login-email').value;
+          const pass = document.getElementById('login-password').value;
+          const result = await actions.loginAdmin(email, pass);
+          if (result.success) {
+            location.reload();
+            return true;
+          } else {
+            alert(result.message);
+            return false;
+          }
+        });
+      };
     }
-  });
+    initIcons();
+  }
 });

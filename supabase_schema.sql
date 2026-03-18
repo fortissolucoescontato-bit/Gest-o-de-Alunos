@@ -123,3 +123,36 @@ FOR INSERT WITH CHECK (
 
 CREATE POLICY "Public Read Storage" ON storage.objects FOR SELECT USING (bucket_id = 'comprovantes');
 
+-- --- ADMIN AUTHENTICATION (INTERNAL) ---
+
+CREATE TABLE IF NOT EXISTS internal_auth (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Note: Password for initial admin is 'Terceira0!2026'
+-- To change, use: UPDATE internal_auth SET password_hash = crypt('NEW_PASS', gen_salt('bf')) WHERE username = 'admin@terceirao2026.com';
+INSERT INTO internal_auth (username, password_hash)
+VALUES ('admin@terceirao2026.com', crypt('Terceira0!2026', gen_salt('bf')))
+ON CONFLICT (username) DO NOTHING;
+
+ALTER TABLE internal_auth ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Internal Access Only" ON internal_auth FOR ALL USING (false);
+
+-- RPC for secure login verification
+CREATE OR REPLACE FUNCTION verify_admin_login(p_username TEXT, p_password TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_match BOOLEAN;
+BEGIN
+    SELECT (password_hash = crypt(p_password, password_hash))
+    INTO v_match
+    FROM internal_auth
+    WHERE username = p_username;
+    
+    RETURN COALESCE(v_match, false);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+

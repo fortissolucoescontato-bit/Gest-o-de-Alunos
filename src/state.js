@@ -9,7 +9,8 @@ export const state = {
     targetAmount: 80000,
     perStudent: 2000,
   },
-  loading: true
+  loading: true,
+  isAdmin: localStorage.getItem('isAdmin') === 'true'
 };
 
 // --- Initial Data Load ---
@@ -214,6 +215,32 @@ export const actions = {
 
     await loadInitialData();
     return { success: true, message: 'Evento adicionado' };
+  },
+
+  loginAdmin: async (username, password) => {
+    const { data, error } = await supabase.rpc('verify_admin_login', {
+      p_username: username,
+      p_password: password
+    });
+
+    if (error) {
+      console.error('Login Error:', error);
+      return { success: false, message: 'Falha na conexão com servidor auth.' };
+    }
+
+    if (data === true) {
+      state.isAdmin = true;
+      localStorage.setItem('isAdmin', 'true');
+      return { success: true, message: 'Bem vindo, Administrador!' };
+    }
+
+    return { success: false, message: 'Usuário ou senha incorretos.' };
+  },
+
+  logoutAdmin: () => {
+    state.isAdmin = false;
+    localStorage.removeItem('isAdmin');
+    location.reload();
   },
 
   deleteEvent: async (id) => {
