@@ -951,6 +951,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.isAdmin) {
       adminBtn.innerHTML = `<i data-lucide="log-out"></i> Sair do Painel`;
       adminBtn.onclick = () => actions.logoutAdmin();
+
+      // Add "Mudar Senha" button dynamically
+      const navList = adminBtn.parentElement;
+      const passBtn = document.createElement('li');
+      passBtn.className = 'nav-item';
+      passBtn.id = 'change-pass-btn';
+      passBtn.style.marginTop = '0.5rem';
+      passBtn.innerHTML = `<i data-lucide="key"></i> Mudar Senha`;
+      passBtn.onclick = () => {
+        showModal('Alterar Senha do Admin', `
+          <div class="form-group">
+            <label>Senha Atual</label>
+            <input type="password" id="current-pass" class="ai-input">
+          </div>
+          <div class="form-group" style="margin-top: 1.25rem;">
+            <label>Nova Senha</label>
+            <input type="password" id="new-pass" class="ai-input">
+          </div>
+        `, async () => {
+          const oldP = document.getElementById('current-pass').value;
+          const newP = document.getElementById('new-pass').value;
+          if (oldP && newP) {
+            const result = await actions.changeAdminPassword(oldP, newP);
+            alert(result.message);
+            return result.success;
+          }
+          return false;
+        });
+      };
+      navList.appendChild(passBtn);
     } else {
       adminBtn.onclick = () => {
         showModal('Acesso do Aluno Responsável', `

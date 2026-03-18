@@ -231,6 +231,7 @@ export const actions = {
     if (data === true) {
       state.isAdmin = true;
       localStorage.setItem('isAdmin', 'true');
+      localStorage.setItem('adminEmail', username);
       return { success: true, message: 'Bem vindo, Administrador!' };
     }
 
@@ -240,7 +241,20 @@ export const actions = {
   logoutAdmin: () => {
     state.isAdmin = false;
     localStorage.removeItem('isAdmin');
+    localStorage.removeItem('adminEmail');
     location.reload();
+  },
+
+  changeAdminPassword: async (currentPassword, newPassword) => {
+    const email = localStorage.getItem('adminEmail') || 'admin@terceirao2026.com';
+    const { data, error } = await supabase.rpc('update_admin_password', {
+      p_username: email,
+      p_current_password: currentPassword,
+      p_new_password: newPassword
+    });
+
+    if (error) return { success: false, message: 'Erro na conexão com o servidor.' };
+    return data; // { success: true/false, message: '...' }
   },
 
   deleteEvent: async (id) => {

@@ -156,3 +156,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- RPC for secure password update
+CREATE OR REPLACE FUNCTION update_admin_password(
+    p_username TEXT, 
+    p_current_password TEXT, 
+    p_new_password TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_match BOOLEAN;
+BEGIN
+    SELECT (password_hash = crypt(p_current_password, password_hash))
+    INTO v_match
+    FROM internal_auth
+    WHERE username = p_username;
+    
+    IF NOT COALESCE(v_match, false) THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Senha atual incorreta.');
+    END IF;
+
+    UPDATE internal_auth 
+    SET password_hash = crypt(p_new_password, gen_salt('bf'))
+    WHERE username = p_username;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Senha alterada com sucesso.');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
